@@ -49,10 +49,5 @@ def root():
 
 @app.post("/get-transcript")
 def get_transcript(payload: dict):
-    url = payload.get("url")
-    if not url:
-        return {"error": "URL is required"}
-
-    video_id = extract_video_id(url)
-    if not video_id:
-        return {"error": "Invalid YouTu
+    print("=== HANDLER CALLED ===")
+    ...
