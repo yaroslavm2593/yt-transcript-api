@@ -15,7 +15,13 @@ class TranscriptRequest(BaseModel):
     url: str
 
 def extract_video_id(url: str):
-    patterns = [r"v=([^&]+)", r"youtu\.be/([^?&]+)"]
+    """Извлекает ID видео из различных форматов ссылок YouTube"""
+    patterns = [
+        r"(?:v=|\/)([0-9A-Za-z_-]{11}).*",
+        r"youtu\.be\/([0-9A-Za-z_-]{11})",
+        r"embed\/([0-9A-Za-z_-]{11})",
+        r"shorts\/([0-9A-Za-z_-]{11})"
+    ]
     for pattern in patterns:
         match = re.search(pattern, url)
         if match:
@@ -69,23 +75,23 @@ def get_transcript(request: TranscriptRequest):
             "https": f"http://{api_key}:render_js=False@proxy.scrapingbee.com:8887"
         }
         
-        # Создаем API
-        ytt_api = YouTubeTranscriptApi()
+        # Получаем список транскриптов (с использованием прокси)
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id, proxies=proxies)
         
-        # Получаем транскрипт С ПРОКСИ
-        transcript = ytt_api.fetch(
-            video_id, 
-            languages=['ru', 'en'],
-            proxies=proxies  # ← Прокси передаются ЗДЕСЬ!
-        )
+        # Выбираем лучший вариант (RU или EN)
+        transcript_obj = transcript_list.find_transcript(['ru', 'en'])
         
-        # Преобразуем в текст
-        text = " ".join([snippet.text for snippet in transcript])
+        # Загружаем содержимое
+        transcript_data = transcript_obj.fetch()
+        
+        # Преобразуем в сплошной текст
+        # transcript_data — это итерируемый объект FetchedTranscript, содержащий объекты с полем .text
+        text = " ".join([snippet.text for snippet in transcript_data])
         
         return {
             "video_id": video_id,
-            "language": transcript.language_code,
-            "is_generated": transcript.is_generated,
+            "language": transcript_obj.language_code,
+            "is_generated": transcript_obj.is_generated,
             "transcript": text,
             "success": True,
             "method": "scrapingbee"
