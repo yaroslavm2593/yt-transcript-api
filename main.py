@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api.proxies import WebshareProxyConfig
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,
     NoTranscriptFound,
@@ -12,7 +11,6 @@ import os
 
 app = FastAPI()
 
-# Модель запроса
 class TranscriptRequest(BaseModel):
     url: str
 
@@ -28,24 +26,20 @@ def extract_video_id(url: str):
 def root():
     return {
         "status": "ok",
-        "service": "YouTube Transcript API with Webshare Proxy",
-        "endpoint": "/get-transcript (POST)",
-        "debug": "/debug (GET)"
+        "service": "YouTube Transcript API via ScrapingBee",
+        "endpoint": "/get-transcript (POST)"
     }
 
 @app.get("/debug")
 def debug():
-    """Диагностика настроек прокси"""
-    proxy_username = os.getenv("WEBSHARE_USERNAME")
-    proxy_password = os.getenv("WEBSHARE_PASSWORD")
+    """Диагностика настроек"""
+    api_key = os.getenv("SCRAPINGBEE_API_KEY")
     
     return {
-        "proxy_username_set": bool(proxy_username),
-        "proxy_password_set": bool(proxy_password),
-        "username_length": len(proxy_username) if proxy_username else 0,
-        "password_length": len(proxy_password) if proxy_password else 0,
-        "username_preview": proxy_username[:15] + "..." if proxy_username else "NOT SET",
-        "environment_check": "OK" if proxy_username and proxy_password else "FAILED - Check Render Environment Variables"
+        "api_key_set": bool(api_key),
+        "api_key_length": len(api_key) if api_key else 0,
+        "api_key_preview": api_key[:20] + "..." if api_key else "NOT SET",
+        "environment_check": "OK" if api_key else "FAILED - Check Render Environment Variables"
     }
 
 @app.post("/get-transcript")
@@ -60,23 +54,23 @@ def get_transcript(request: TranscriptRequest):
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
     
     try:
-        # Получаем credentials из переменных окружения
-        proxy_username = os.getenv("WEBSHARE_USERNAME")
-        proxy_password = os.getenv("WEBSHARE_PASSWORD")
+        # Получаем API key из переменных окружения
+        api_key = os.getenv("SCRAPINGBEE_API_KEY")
         
-        if not proxy_username or not proxy_password:
+        if not api_key:
             raise HTTPException(
                 status_code=500, 
-                detail="Proxy credentials not configured. Check /debug endpoint"
+                detail="ScrapingBee API key not configured. Check /debug endpoint"
             )
         
-        # Создаем API с Webshare прокси
-        ytt_api = YouTubeTranscriptApi(
-            proxy_config=WebshareProxyConfig(
-                proxy_username=proxy_username,
-                proxy_password=proxy_password
-            )
-        )
+        # Используем ScrapingBee как прокси для youtube-transcript-api
+        proxies = {
+            "http": f"http://{api_key}:render_js=False@proxy.scrapingbee.com:8886",
+            "https": f"http://{api_key}:render_js=False@proxy.scrapingbee.com:8887"
+        }
+        
+        # Создаем API с прокси
+        ytt_api = YouTubeTranscriptApi(proxies=proxies)
         
         # Получаем транскрипт
         transcript = ytt_api.fetch(video_id, languages=['ru', 'en'])
@@ -89,7 +83,8 @@ def get_transcript(request: TranscriptRequest):
             "language": transcript.language_code,
             "is_generated": transcript.is_generated,
             "transcript": text,
-            "success": True
+            "success": True,
+            "method": "scrapingbee"
         }
         
     except TranscriptsDisabled:
