@@ -63,17 +63,21 @@ def get_transcript(request: TranscriptRequest):
                 detail="ScrapingBee API key not configured. Check /debug endpoint"
             )
         
-        # Используем ScrapingBee как прокси для youtube-transcript-api
+        # Настраиваем прокси ScrapingBee
         proxies = {
             "http": f"http://{api_key}:render_js=False@proxy.scrapingbee.com:8886",
             "https": f"http://{api_key}:render_js=False@proxy.scrapingbee.com:8887"
         }
         
-        # Создаем API с прокси
-        ytt_api = YouTubeTranscriptApi(proxies=proxies)
+        # Создаем API
+        ytt_api = YouTubeTranscriptApi()
         
-        # Получаем транскрипт
-        transcript = ytt_api.fetch(video_id, languages=['ru', 'en'])
+        # Получаем транскрипт С ПРОКСИ
+        transcript = ytt_api.fetch(
+            video_id, 
+            languages=['ru', 'en'],
+            proxies=proxies  # ← Прокси передаются ЗДЕСЬ!
+        )
         
         # Преобразуем в текст
         text = " ".join([snippet.text for snippet in transcript])
