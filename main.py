@@ -50,4 +50,3 @@ def root():
 @app.post("/get-transcript")
 def get_transcript(payload: dict):
     print("=== HANDLER CALLED ===")
-    ...
