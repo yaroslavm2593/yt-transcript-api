@@ -3,17 +3,15 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,
     NoTranscriptFound,
-    VideoUnavailable
+    VideoUnavailable,
+    TooManyRequests
 )
 import re
 
 app = FastAPI()
 
 def extract_video_id(url: str):
-    patterns = [
-        r"v=([^&]+)",
-        r"youtu\.be/([^?&]+)"
-    ]
+    patterns = [r"v=([^&]+)", r"youtu\.be/([^?&]+)"]
     for pattern in patterns:
         match = re.search(pattern, url)
         if match:
@@ -22,7 +20,7 @@ def extract_video_id(url: str):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "service": "yt-transcript-api"}
+    return {"status": "ok", "service": "YouTube Transcript API"}
 
 @app.post("/get-transcript")
 def get_transcript(data: dict):
@@ -35,21 +33,12 @@ def get_transcript(data: dict):
         return {"error": "Invalid YouTube URL"}
     
     try:
-        # Создаем экземпляр API
+        # Простейший способ из документации
         ytt_api = YouTubeTranscriptApi()
+        transcript = ytt_api.fetch(video_id, languages=['ru', 'en'])
         
-        # Получаем список доступных транскриптов
-        transcript_list = ytt_api.list(video_id)
-        
-        # Ищем русский или английский транскрипт
-        try:
-            transcript = transcript_list.find_transcript(['ru', 'en'])
-        except NoTranscriptFound:
-            return {"error": "No Russian or English transcript available"}
-        
-        # Получаем текст
-        fetched = transcript.fetch()
-        text = " ".join([snippet["text"] for snippet in fetched])
+        # Преобразуем в текст
+        text = " ".join([snippet.text for snippet in transcript])
         
         return {
             "video_id": video_id,
@@ -59,8 +48,12 @@ def get_transcript(data: dict):
         }
         
     except TranscriptsDisabled:
-        return {"error": "Transcripts are disabled for this video"}
+        return {"error": "Transcripts disabled for this video"}
+    except NoTranscriptFound:
+        return {"error": "No Russian or English transcript available"}
     except VideoUnavailable:
-        return {"error": "Video is unavailable"}
+        return {"error": "Video unavailable"}
+    except TooManyRequests:
+        return {"error": "YouTube blocked request (too many requests)"}
     except Exception as e:
         return {"error": f"Error: {str(e)}"}
