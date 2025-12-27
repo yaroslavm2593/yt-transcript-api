@@ -1,16 +1,20 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.proxies import WebshareProxyConfig
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,
     NoTranscriptFound,
-    VideoUnavailable,
-    TooManyRequests
+    VideoUnavailable
 )
 import re
 import os
 
 app = FastAPI()
+
+# Модель запроса
+class TranscriptRequest(BaseModel):
+    url: str
 
 def extract_video_id(url: str):
     patterns = [r"v=([^&]+)", r"youtu\.be/([^?&]+)"]
@@ -22,17 +26,22 @@ def extract_video_id(url: str):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "service": "YouTube Transcript API with Webshare Proxy"}
+    return {
+        "status": "ok",
+        "service": "YouTube Transcript API with Webshare Proxy",
+        "endpoint": "/get-transcript (POST)"
+    }
 
 @app.post("/get-transcript")
-def get_transcript(data: dict):
-    url = data.get("url")
+def get_transcript(request: TranscriptRequest):
+    url = request.url
+    
     if not url:
-        return {"error": "URL is required"}
+        raise HTTPException(status_code=400, detail="URL is required")
     
     video_id = extract_video_id(url)
     if not video_id:
-        return {"error": "Invalid YouTube URL"}
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
     
     try:
         # Получаем credentials из переменных окружения
@@ -40,7 +49,10 @@ def get_transcript(data: dict):
         proxy_password = os.getenv("WEBSHARE_PASSWORD")
         
         if not proxy_username or not proxy_password:
-            return {"error": "Proxy credentials not configured"}
+            raise HTTPException(
+                status_code=500, 
+                detail="Proxy credentials not configured in environment variables"
+            )
         
         # Создаем API с Webshare прокси
         ytt_api = YouTubeTranscriptApi(
@@ -64,12 +76,10 @@ def get_transcript(data: dict):
         }
         
     except TranscriptsDisabled:
-        return {"error": "Transcripts disabled for this video"}
+        raise HTTPException(status_code=404, detail="Transcripts disabled for this video")
     except NoTranscriptFound:
-        return {"error": "No Russian or English transcript available"}
+        raise HTTPException(status_code=404, detail="No Russian or English transcript available")
     except VideoUnavailable:
-        return {"error": "Video unavailable"}
-    except TooManyRequests:
-        return {"error": "Rate limit exceeded"}
+        raise HTTPException(status_code=404, detail="Video unavailable")
     except Exception as e:
-        return {"error": f"Error: {str(e)}"}
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
