@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.proxies import WebshareProxyConfig
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,
     NoTranscriptFound,
@@ -7,6 +8,7 @@ from youtube_transcript_api._errors import (
     TooManyRequests
 )
 import re
+import os
 
 app = FastAPI()
 
@@ -20,7 +22,7 @@ def extract_video_id(url: str):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "service": "YouTube Transcript API"}
+    return {"status": "ok", "service": "YouTube Transcript API with Webshare Proxy"}
 
 @app.post("/get-transcript")
 def get_transcript(data: dict):
@@ -33,11 +35,25 @@ def get_transcript(data: dict):
         return {"error": "Invalid YouTube URL"}
     
     try:
+        # Получаем credentials из переменных окружения
+        proxy_username = os.getenv("WEBSHARE_USERNAME")
+        proxy_password = os.getenv("WEBSHARE_PASSWORD")
+        
+        if not proxy_username or not proxy_password:
+            return {"error": "Proxy credentials not configured"}
+        
+        # Создаем API с Webshare прокси
+        ytt_api = YouTubeTranscriptApi(
+            proxy_config=WebshareProxyConfig(
+                proxy_username=proxy_username,
+                proxy_password=proxy_password
+            )
+        )
+        
         # Получаем транскрипт
-        ytt_api = YouTubeTranscriptApi()
         transcript = ytt_api.fetch(video_id, languages=['ru', 'en'])
         
-        # Преобразуем в текст (используем .text вместо ["text"])
+        # Преобразуем в текст
         text = " ".join([snippet.text for snippet in transcript])
         
         return {
@@ -54,6 +70,6 @@ def get_transcript(data: dict):
     except VideoUnavailable:
         return {"error": "Video unavailable"}
     except TooManyRequests:
-        return {"error": "YouTube blocked request (too many requests)"}
+        return {"error": "Rate limit exceeded"}
     except Exception as e:
         return {"error": f"Error: {str(e)}"}
