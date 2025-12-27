@@ -8,6 +8,10 @@ def extract_video_id(url: str):
     match = re.search(r"(?:v=|youtu\.be/)([^&?/]+)", url)
     return match.group(1) if match else None
 
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "yt-transcript-api"}
+
 @app.post("/get-transcript")
 def get_transcript(data: dict):
     url = data.get("url")
@@ -17,7 +21,8 @@ def get_transcript(data: dict):
         return {"error": "Invalid YouTube URL"}
 
     try:
-        transcript = YouTubeTranscriptApi.get_transcript(
+        api = YouTubeTranscriptApi()
+        transcript = api.get_transcript(
             video_id,
             languages=["ru", "en"]
         )
