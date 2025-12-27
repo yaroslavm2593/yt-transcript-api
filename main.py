@@ -33,11 +33,11 @@ def get_transcript(data: dict):
         return {"error": "Invalid YouTube URL"}
     
     try:
-        # Простейший способ из документации
+        # Получаем транскрипт
         ytt_api = YouTubeTranscriptApi()
         transcript = ytt_api.fetch(video_id, languages=['ru', 'en'])
         
-        # Преобразуем в текст
+        # Преобразуем в текст (используем .text вместо ["text"])
         text = " ".join([snippet.text for snippet in transcript])
         
         return {
