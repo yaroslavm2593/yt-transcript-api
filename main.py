@@ -3,39 +3,64 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,
     NoTranscriptFound,
-    VideoUnavailable,
+    VideoUnavailable
 )
 import re
 
-app = FastAPI(title="YouTube Transcript API")
+app = FastAPI()
 
-def extract_video_id(url: str) -> str | None:
-    match = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url)
-    return match.group(1) if match else None
+def extract_video_id(url: str):
+    patterns = [
+        r"v=([^&]+)",
+        r"youtu\.be/([^?&]+)"
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "yt-transcript-api"}
 
 @app.post("/get-transcript")
-def get_transcript(payload: dict):
-    url = payload.get("url")
+def get_transcript(data: dict):
+    url = data.get("url")
     if not url:
         return {"error": "URL is required"}
-
+    
     video_id = extract_video_id(url)
     if not video_id:
         return {"error": "Invalid YouTube URL"}
-
+    
     try:
-        transcript = YouTubeTranscriptApi.get_transcript(
-            video_id,
-            languages=["ru", "en"]
-        )
-        text = " ".join(item["text"] for item in transcript)
-        return {"transcript": text}
-
+        # Создаем экземпляр API
+        ytt_api = YouTubeTranscriptApi()
+        
+        # Получаем список доступных транскриптов
+        transcript_list = ytt_api.list(video_id)
+        
+        # Ищем русский или английский транскрипт
+        try:
+            transcript = transcript_list.find_transcript(['ru', 'en'])
+        except NoTranscriptFound:
+            return {"error": "No Russian or English transcript available"}
+        
+        # Получаем текст
+        fetched = transcript.fetch()
+        text = " ".join([snippet["text"] for snippet in fetched])
+        
+        return {
+            "video_id": video_id,
+            "language": transcript.language_code,
+            "is_generated": transcript.is_generated,
+            "transcript": text
+        }
+        
     except TranscriptsDisabled:
-        return {"error": "Transcripts are disabled"}
-    except NoTranscriptFound:
-        return {"error": "No transcript found"}
+        return {"error": "Transcripts are disabled for this video"}
     except VideoUnavailable:
-        return {"error": "Video unavailable"}
+        return {"error": "Video is unavailable"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Error: {str(e)}"}
