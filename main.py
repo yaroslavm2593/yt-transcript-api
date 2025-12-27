@@ -1,3 +1,5 @@
+print("=== DEPLOYED VERSION: LIST_TRANSCRIPTS ===")
+
 from fastapi import FastAPI
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
