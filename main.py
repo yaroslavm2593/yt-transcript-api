@@ -29,7 +29,23 @@ def root():
     return {
         "status": "ok",
         "service": "YouTube Transcript API with Webshare Proxy",
-        "endpoint": "/get-transcript (POST)"
+        "endpoint": "/get-transcript (POST)",
+        "debug": "/debug (GET)"
+    }
+
+@app.get("/debug")
+def debug():
+    """Диагностика настроек прокси"""
+    proxy_username = os.getenv("WEBSHARE_USERNAME")
+    proxy_password = os.getenv("WEBSHARE_PASSWORD")
+    
+    return {
+        "proxy_username_set": bool(proxy_username),
+        "proxy_password_set": bool(proxy_password),
+        "username_length": len(proxy_username) if proxy_username else 0,
+        "password_length": len(proxy_password) if proxy_password else 0,
+        "username_preview": proxy_username[:15] + "..." if proxy_username else "NOT SET",
+        "environment_check": "OK" if proxy_username and proxy_password else "FAILED - Check Render Environment Variables"
     }
 
 @app.post("/get-transcript")
@@ -51,7 +67,7 @@ def get_transcript(request: TranscriptRequest):
         if not proxy_username or not proxy_password:
             raise HTTPException(
                 status_code=500, 
-                detail="Proxy credentials not configured in environment variables"
+                detail="Proxy credentials not configured. Check /debug endpoint"
             )
         
         # Создаем API с Webshare прокси
@@ -72,7 +88,8 @@ def get_transcript(request: TranscriptRequest):
             "video_id": video_id,
             "language": transcript.language_code,
             "is_generated": transcript.is_generated,
-            "transcript": text
+            "transcript": text,
+            "success": True
         }
         
     except TranscriptsDisabled:
